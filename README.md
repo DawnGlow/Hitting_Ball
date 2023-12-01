@@ -19,3 +19,10 @@
 모든 플레이어가 야구 배트를 가지고 있지 않고, 야구 배트를 가지고 있더라도 실내에서 야구 배트를 스윙할 환경이 갖춰지지 않은 경우가 대다수 이므로 **펀칭(punching) 하는 동작을 스윙하는 동작으로 대신합니다.** 
 
 팔을 재빠르게 움직여 공이 날라오는 위치에 다가가 올바른 타이밍에 공을 맞춰보세요!
+
+python 3.12버전 실행 불가(mediapipe 모듈을 사용할 수 없음)
+
+참조) https://www.youtube.com/watch?v=XK3eU9egll8
+https://github.com/choo121600/OpenCV_GunGame
+https://parkjh7764.tistory.com/88
+https://wallpaperset.com/baseball-field-wallpaper
