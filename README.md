@@ -26,3 +26,4 @@ python 3.12버전 실행 불가(mediapipe 모듈을 사용할 수 없음)
 https://github.com/choo121600/OpenCV_GunGame
 https://parkjh7764.tistory.com/88
 https://wallpaperset.com/baseball-field-wallpaper
+https://www.youtube.com/watch?v=SvlUj8RjkPc
