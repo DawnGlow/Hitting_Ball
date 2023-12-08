@@ -1,6 +1,6 @@
 import pygame
 import time
-from src import throw
+from src import throw, getDistance, overlay
 
 gamescore = 0
 
