@@ -16,8 +16,6 @@ screen_width = 1600  # 가로 크기
 screen_height = 900  # 세로 크기
 screen = pygame.display.set_mode((screen_width, screen_height))
 
-clock = pygame.time.Clock()
-
 # 사운드 파일 로드
 hit_sound = pygame.mixer.Sound('sound/hit.mp3')  # 볼이 맞았을 때 효과음
 throw_sound = pygame.mixer.Sound('sound/throw.mp3')  # 볼을 던질 때 효과음
@@ -85,7 +83,7 @@ pitcher_ready_height = pitcher_ready_size[1]  # 캐릭터 세로 크기
 
 # 캐릭터의 기준 좌표를 캐릭터의 왼쪽 상단으로 둔다.
 pitcher_ready_x_pos = 700
-pitcher_ready_y_pos = 270
+pitcher_ready_y_pos = 200
 
 # 스트라이크 존 이미지 크기 초기화
 strike_zone_size = strike_zone.get_rect().size
@@ -93,23 +91,12 @@ strike_zone_width = strike_zone_size[0]  # 캐릭터 가로 크기
 strike_zone_height = strike_zone_size[1]  # 캐릭터 세로 크기
 
 strike_zone_x_pos = 670 # 스트라이크 존의 x좌표
-strike_zone_y_pos = 380 # 스트라이크 존의 y좌표
-
+strike_zone_y_pos = 325 # 스트라이크 존의 y좌표
 
 # ball 이미지 크기 초기화
-ball_size = ball.get_size()
-# 50 X 50
+ball_size = ball.get_rect().size
 ball_width = ball_size[0]
 ball_height = ball_size[1]
-ball_x_pos = 830
-ball_y_pos = 280
-
-moveball = ball
-moveball_size = ball_size
-moveball_width = ball_size[0]
-moveball_height = ball_size[1]
-moveball_x_pos = ball_x_pos
-moveball_y_pos = ball_y_pos
 
 
 # pose definition
@@ -125,15 +112,8 @@ hands = mp_hands.Hands()
 
 # Game states
 GAME_READY = 0
-GAME_WAIT = 1
-GAME_THROW1 = 2
-GAME_THROW2 = 3
-GAME_HIT = 4
-GAME_RESULT_1 = 5 # 일찍스윙 -> 헛스윙
-GAME_RESULT_2 = 6 # 스윙 -> hit
-GAME_RESULT_3 = 7 # 늦게스윙 -> 헛스윙
-GAME_RESULT_3 = 8 # just look
-GAME_OVER = 9
+GAME_PLAYING = 1
+GAME_OVER = 2
 
 game_state = GAME_READY
 start_time = 0
@@ -141,35 +121,6 @@ score = 0
 
 font = pygame.font.SysFont(None, 55)
 instruction_text = font.render("Put your fist in the strike zone", True, (255, 255, 255))
-waiting_text = font.render("Wating time", True, (255, 255, 255))
-throw_text = font.render("Focus on ball!", True, (255, 255, 255))
-hit_text = font.render("Hit ball!", True, (255, 255, 255))
-miss_text = font.render("Miss ball!", True, (255, 255, 255))
-
-# Using this function for Development
-def print_mouse_position():
-    mouse_pos = pygame.mouse.get_pos()
-    print(f"Mouse Position: {mouse_pos}")
-    
-# 볼 위치를 계산해서 return 해주는 함수
-# elapsed_time : 경과 시간, throw_time : 스트라이크 존에 도착하는데 걸리는 시간
-# random_pos_x, random_pos_y : 공이 스트라이크 존을 통과하는 위치
-def ball_pos_cal(elapsed_time, throw_time, random_pos_x, random_pos_y):
-    global moveball
-    # 초기 위치
-    init_x = ball_x_pos
-    init_y = ball_y_pos
-    
-    # 직선 운동 방정식을 사용하여 현재 위치 계산
-    current_x = init_x + (random_pos_x - init_x) * (elapsed_time / throw_time)
-    current_y = init_y + (random_pos_y - init_y) * (elapsed_time / throw_time)
-
-    # 공의 크기가 커짐
-    # scale_factor = 1 + elapsed_time / (2 * throw_time)
-    scale_factor = 1 + elapsed_time / throw_time
-    moveball = pygame.transform.scale(ball, (int(ball_size[0] * scale_factor), int(ball_size[1] * scale_factor)))
-    # 현재 위치 반환
-    return current_x, current_y
 
 def check_hit(hand_landmarks, ball_position):
     # 손 위치가 공 위치와 일치하는지 확인
@@ -181,66 +132,17 @@ def check_hit(hand_landmarks, ball_position):
         return True
     return False
 
-def pose_condition(frame):
-    results = hands.process(frame)
-
-    if results.multi_hand_landmarks:
-        hand_landmarks = results.multi_hand_landmarks[0]
-        hand_position = (
-            int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * screen_width),
-            int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * screen_height),
-        )
-
-        if (
-            strike_zone_x_pos < hand_position[0] < strike_zone_x_pos + strike_zone_width
-            and strike_zone_y_pos < hand_position[1] < strike_zone_y_pos + strike_zone_height
-        ):
-            return True
-            
-    return False
-
-def wait(start_time, wait_time):
-    if time.time() - start_time >= wait_time:
-        return True
-    
-# throw 함수에서 사용할 변수들을 선언합니다.
-throw_animation_speed = 500  # 공이 이동하는 속도 (픽셀/초)
-throw_animation_start_time = None  # 애니메이션 시작 시간
-
-def throw(start_time, throw_time, random_pox_x, random_pox_y):
-    global moveball_x_pos, moveball_y_pos, throw_animation_start_time
-    current_time = time.time()
-    elapsed_time = current_time - start_time
-    
-    # 공이 도착하기 0.6초 전에 예상 위치 출력
-    if throw_time - elapsed_time < 0.6:
-        pygame.draw.circle(screen, (255, 0, 0), (random_pox_x + ball_width, random_pox_y + ball_width), ball_width / 2)
-
-    if elapsed_time >= throw_time:
-        return GAME_RESULT_3
-
-    if throw_animation_start_time is None:
-        throw_animation_start_time = current_time
-
-    # 애니메이션 시간에 따라 공의 위치를 계산합니다.
-    animation_elapsed_time = current_time - throw_animation_start_time
-    moveball_x_pos, moveball_y_pos = ball_pos_cal(
-        animation_elapsed_time, throw_time, random_pox_x, random_pox_y
-    )
-
-    return GAME_THROW1
 
 def playgame():
-    global game_state, start_time, score, moveball, pitcher_ready
-    wait_time = random.uniform(1.5, 2.5)
-    throw_time = random.uniform(1.3, 2.0)
-    random_pos_x = random.uniform(678, 938)
-    random_pos_y = random.uniform(390, 698)
+    global game_state, start_time, score, ball, pitcher_ready
+    
+    # pitcher_throw 이미지 출력을 위한 변수 추가
+    pitcher_throw_time = 0
+
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
     pygame.display.set_caption('Camera Stream')
-    
     
     try:
         while True:
@@ -260,42 +162,68 @@ def playgame():
             blended_frame_rgb = cv2.cvtColor(blended_frame, cv2.COLOR_BGR2RGB)
             img = pygame.surfarray.make_surface(blended_frame_rgb)
 
-            # without any condition 항상 출력
             screen.blit(img, (0, 0))
             screen.blit(strike_zone, (strike_zone_x_pos, strike_zone_y_pos))
-            
-            # 투수와 타자의 이미지 initializing
-            hitter = hitter_ready
-            pitcher = pitcher_ready
-            text = instruction_text
-            
+            # 스트라이크 존과 텍스트는 항상 출력
             if game_state == GAME_READY:
-                if (pose_condition(frame)):
-                    game_state = GAME_WAIT
-                    start_time = time.time()
-            elif game_state == GAME_WAIT:
-                text = waiting_text
-                if (wait(start_time, wait_time)):
-                    game_state = GAME_THROW1
-                    start_time = time.time()
-            elif game_state == GAME_THROW1:
-                pitcher = pitcher_throw
-                text = throw_text
-                game_state = throw(start_time, throw_time, random_pos_x, random_pos_y)
-            elif game_state == GAME_HIT:
-                continue
-            elif game_state == GAME_RESULT_1:
-                continue
-            elif game_state == GAME_RESULT_2:
-                continue
-            elif game_state == GAME_RESULT_3:
-                continue
-            
-            if game_state != GAME_READY:    
-                screen.blit(pitcher, (pitcher_ready_x_pos, pitcher_ready_y_pos))
-                screen.blit(hitter, (hitter_ready_x_pos, hitter_ready_y_pos))
-                screen.blit(moveball, (moveball_x_pos, moveball_y_pos))
-            screen.blit(text, (10, 10))
+                screen.blit(instruction_text, (10, 10))
+
+            results = hands.process(frame)
+
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0]
+                hand_position = (
+                    int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * screen_width),
+                    int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * screen_height),
+                )
+
+                if (
+                    strike_zone_x_pos < hand_position[0] < strike_zone_x_pos + strike_zone_width
+                    and strike_zone_y_pos < hand_position[1] < strike_zone_y_pos + strike_zone_height
+                ):
+                    if game_state == GAME_READY:
+                        # 주먹을 감지하고 공을 던지기 전까지 pitcher_ready 이미지 출력
+                        if results.multi_hand_landmarks:
+                            screen.blit(pitcher_ready, (pitcher_ready_x_pos, pitcher_ready_y_pos))
+                        else:
+                            screen.blit(instruction_text, (10, 10))
+                            start_time = time.time()  # 주먹 인식되면 시간 초기화 및 상태 전환
+                            game_state = GAME_PLAYING
+
+                    elif game_state == GAME_PLAYING:
+                        elapsed_time = time.time() - start_time
+                        if elapsed_time >= 1.3 and elapsed_time <= 2.0:
+                            ball_speed = random.uniform(1.3, 2.0)
+                            ball_diameter = int((elapsed_time / 2) * 50)
+                            ball = pygame.transform.scale(ball, (ball_diameter, ball_diameter))
+                            ball_position = (
+                                int(pitcher_ready_x_pos + ball_speed * elapsed_time),
+                                int(strike_zone_y_pos + random.randint(-50, 50)),
+                            )
+                            screen.blit(ball, ball_position)
+                            if (
+                                0.7 * elapsed_time < 1.3 * elapsed_time
+                                and check_hit(hand_position, ball_position)
+                            ):
+                                score += 1
+                                hit_sound.play()
+                                game_state = GAME_READY
+                                if score >= 10:
+                                    game_state = GAME_OVER
+                                    print("게임 종료! 당신의 점수:", score)
+                                else:
+                                    hitter_swing_time = time.time()  # 타자가 스윙하는 시간 기록
+                                    screen.blit(hitter_ready, (hitter_ready_x_pos, hitter_ready_y_pos))
+
+                        if 0.4 < elapsed_time < 0.8:
+                            # 투수가 공을 던지는 동안 pitcher_throw 이미지 출력
+                            if time.time() - pitcher_throw_time < 1.5:  # 1.5초 동안 pitcher_throw 이미지 유지
+                                screen.blit(pitcher_throw, (pitcher_ready_x_pos, pitcher_ready_y_pos))
+                            else:
+                                # 타자가 스윙하는 동안 hitter_swing 이미지 출력
+                                if time.time() - hitter_swing_time < 0.5:
+                                    screen.blit(hitter_swing, (hitter_ready_x_pos, hitter_ready_y_pos))
+                                    hitter_ready = hitter_swing
 
             pygame.display.flip()
 
