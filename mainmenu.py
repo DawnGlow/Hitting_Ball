@@ -1,50 +1,18 @@
 import pygame
-import time
 import sys
-from src import throw, getDistance, overlay, playgame
+import csv
+from src import playgame, settings
 
 
 pygame.init()
-
-# File section
-hit_sound = pygame.mixer.Sound('sound/hit.mp3')
-throw_sound = pygame.mixer.Sound('sound/throw.mp3')
-background = pygame.image.load('image/field_hitter.jpg')
-hitter_ready = pygame.image.load('image/hitter_1.png')
-pitcher_ready = pygame.image.load('image/pitcher_1.png')
-hitter_swing = pygame.image.load('image/hitter_2.png')
-pitcher_throw = pygame.image.load('image/pitcher_2.png')
-strike_zone = pygame.image.load('image/strike_zone.png')
 
 main_background = pygame.image.load('image/main_background.jpg')
 
 # screen setting
 # resolution: 1600X900
-screen_width = 1600  # 가로 크기
-screen_height = 900  # 세로 크기
+screen_width = settings.screen_width  # 가로 크기
+screen_height = settings.screen_height  # 세로 크기
 screen = pygame.display.set_mode((screen_width, screen_height))
-
-# 캐릭터 pos
-hitter_ready_size = hitter_ready.get_rect().size  # 캐릭터 이미지 사이즈 구하기
-hitter_ready_width = hitter_ready_size[0]  # 캐릭터 가로 크기
-hitter_ready_height = hitter_ready_size[1]  # 캐릭터 세로 크기
-# 캐릭터의 기준 좌표를 캐릭터의 왼쪽 상단으로 둔다.
-hitter_ready_x_pos = (screen_width / 2) - 1.2 * (hitter_ready_width)  # 화면 가로 절반의 중간에 위치. 좌우로 움직이는 변수
-hitter_ready_y_pos = screen_height - 1.5 * hitter_ready_height  # 이미지가 화면 세로의 가장 아래 위치
-
-pitcher_ready_size = pitcher_ready.get_rect().size  # 캐릭터 이미지 사이즈 구하기
-pitcher_ready_width = pitcher_ready_size[0]  # 캐릭터 가로 크기
-pitcher_ready_height = pitcher_ready_size[1]  # 캐릭터 세로 크기
-# 캐릭터의 기준 좌표를 캐릭터의 왼쪽 상단으로 둔다.
-pitcher_ready_x_pos = 700
-pitcher_ready_y_pos = 200
-
-strike_zone_size = strike_zone.get_rect().size
-strike_zone_width = strike_zone_size[0]  # 캐릭터 가로 크기
-strike_zone_height = strike_zone_size[1]  # 캐릭터 세로 크기
-
-strike_zone_x_pos = 670
-strike_zone_y_pos = 325
 
 # 화면 타이틀 설정
 pygame.display.set_caption("Hitting_Ball Client")
@@ -88,6 +56,64 @@ class Button:
             if self.rect.collidepoint(event.pos):
                 self.callback()
                 
+class RecordsButton(Button):
+    def __init__(self, text, x, y, width, height, color=(255, 255, 255), highlight_color=(200, 200, 200)):
+        super().__init__(text, self.show_records, x, y, width, height, color, highlight_color)
+
+    def show_records(self):
+        records_menu()
+
+def records_menu():
+    records = read_records_from_csv()
+    menu = True
+
+    backButton = Button("Back", mainmenu, screen_width // 2 - 50, screen_height - 100, 100, 50)
+
+    while menu:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                quitgame()
+
+            backButton.handle_event(event)
+
+        screen.blit(main_background, (0, 0))
+
+        text = font.render("Records", True, (255, 0, 0))
+        screen.blit(text, (screen_width // 2 - text.get_width() // 2, text.get_height()))
+
+        display_records(records)
+
+        backButton.draw(screen, font)
+
+        pygame.display.update()
+        clock.tick(15)
+
+def display_records(records):
+    if not records:
+        no_records_text = font.render("No records yet.", True, (255, 255, 255))
+        screen.blit(no_records_text, (screen_width // 2 - no_records_text.get_width() // 2, screen_height // 2))
+        return
+
+    header_text = font.render("Timestamp | Accuracy", True, (255, 255, 255))
+    screen.blit(header_text, (screen_width // 2 - header_text.get_width() // 2, screen_height // 4))
+
+    y_offset = screen_height // 4 + header_text.get_height() + 10
+
+    for record in records:
+        record_text = font.render(record, True, (255, 255, 255))
+        screen.blit(record_text, (screen_width // 2 - record_text.get_width() // 2, y_offset))
+        y_offset += record_text.get_height() + 5
+
+def read_records_from_csv():
+    try:
+        with open('record.csv', 'r', newline='') as csv_file:
+            csv_reader = csv.reader(csv_file)
+            header = next(csv_reader)  # Skip the header
+            records = [f"{row[0]} | {row[1]}" for row in csv_reader]
+        return records
+    except FileNotFoundError:
+        return []
+
 # 게임 종료
 def quitgame():
     pygame.quit()
@@ -97,7 +123,8 @@ def mainmenu():
     menu = True
 
     startButton = Button("Game Start", playgame.playgame, screen_width // 2 - 100, screen_height // 2, 200, 50)
-    quitButton = Button("Quit Game", quitgame, screen_width // 2 - 100, screen_height // 2 + 60, 200, 50)
+    quitButton = Button("Quit Game", quitgame, screen_width // 2 - 100, screen_height // 2 + 200, 200, 50)
+    recordsButton = RecordsButton("View Records", screen_width // 2 - 100, screen_height // 2 + 100, 200, 50)
 
     while menu:
         for event in pygame.event.get():
@@ -106,14 +133,16 @@ def mainmenu():
 
             startButton.handle_event(event)
             quitButton.handle_event(event)
+            recordsButton.handle_event(event)
 
         screen.blit(main_background, (0, 0))
 
-        text = font.render("Main Menu", True, white)
-        screen.blit(text, (screen_width // 2 - text.get_width() // 2, screen_height // 2 - text.get_height() // 2))
+        text = font.render("Hitting BALL", True, (255, 0, 0))
+        screen.blit(text, (screen_width // 2 - text.get_width() // 2, text.get_height()))
 
         startButton.draw(screen, font)
         quitButton.draw(screen, font)
+        recordsButton.draw(screen, font)
 
         pygame.display.update()
         clock.tick(15)

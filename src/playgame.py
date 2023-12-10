@@ -4,23 +4,26 @@ import sys
 import cv2
 import mediapipe as mp
 import random
-import math
-from src import throw, getDistance, overlay, playgame
+import csv
+from src import throw, overlay, settings, ai
+from development import debugFunction
 
 # Pygame 초기화
 pygame.init()
 
 # screen setting
 # resolution: 1600X900
-screen_width = 1600  # 가로 크기
-screen_height = 900  # 세로 크기
+screen_width = settings.screen_width  # 가로 크기
+screen_height = settings.screen_height  # 세로 크기
 screen = pygame.display.set_mode((screen_width, screen_height))
 
 clock = pygame.time.Clock()
+game_state_timer = 0
 
 # 사운드 파일 로드
 hit_sound = pygame.mixer.Sound('sound/hit.mp3')  # 볼이 맞았을 때 효과음
 throw_sound = pygame.mixer.Sound('sound/throw.mp3')  # 볼을 던질 때 효과음
+miss_swing_sound = pygame.mixer.Sound('sound/miss_swing.mp3')  # 헛스윙 효과음
 
 # 이미지 로드
 hitter_ready = pygame.image.load('image/hitter_1.png') # 타석에 대기중인 타자
@@ -35,37 +38,9 @@ background = cv2.imread('image/field_hitter.jpg', cv2.IMREAD_UNCHANGED) # 배경
 background = cv2.resize(background, (screen_width, screen_height)) # 배경의 크기를 screen의 크기와 일치
 
 """
-# 이미지 선언
-mole_image = cv2.imread('image/mole_tr100.png', cv2.IMREAD_UNCHANGED)
-moleh, molew, _ = mole_image.shape
-
-shine_image = cv2.imread('image/shine.png', cv2.IMREAD_UNCHANGED)
-shineh, shinew, _ = shine_image.shape
-
-clap_image = cv2.imread('image/clap.png', cv2.IMREAD_UNCHANGED)
-claph, clapw, _ = clap_image.shape
-
-
 # time variable
 time_given=30.9
 time_remaining = 99
-
-rx0=random.randint(50, 590)
-ry0=random.randint(50, 430)
-# rx0=random.randint(0, 540)
-# ry0=random.randint(0, 380)
-r0 = []
-r0.append(rx0)
-r0.append(ry0)
-
-
-rx1=random.randint(50, 590)
-ry1=random.randint(50, 430)
-# rx1=random.randint(0,540)
-# ry1=random.randint(0,380)
-r1 = []
-r1.append(rx1)
-r1.append(ry1)
 
 """
 
@@ -118,39 +93,41 @@ mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 mp_holistic = mp.solutions.holistic
 
-# Initialize MediaPipe Hand model
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands()
-
 
 # Game states
 GAME_READY = 0
 GAME_WAIT = 1
 GAME_THROW1 = 2
-GAME_THROW2 = 3
-GAME_HIT = 4
+GAME_HIT = 3 # Not used
+GAME_MISS_HIT = 4 # 정확한 위치에 스윙 하지 않은 경우
 GAME_RESULT_1 = 5 # 일찍스윙 -> 헛스윙
 GAME_RESULT_2 = 6 # 스윙 -> hit
-GAME_RESULT_3 = 7 # 늦게스윙 -> 헛스윙
-GAME_RESULT_3 = 8 # just look
-GAME_OVER = 9
+GAME_LATE = 7 # 정확한 타이밍 이후
+GAME_LATE_HIT = 8 # 늦게스윙 -> 헛스윙
+GAME_LOOK = 9 # Just Look
+GAME_OVER = 10
+
+# allowed time
+allowed_time = settings.allowed_time
 
 game_state = GAME_READY
 start_time = 0
 score = 0
 
 font = pygame.font.SysFont(None, 55)
-instruction_text = font.render("Put your fist in the strike zone", True, (255, 255, 255))
+instruction_text = font.render("Put your hand (include V) in the strike zone", True, (255, 255, 255))
 waiting_text = font.render("Wating time", True, (255, 255, 255))
 throw_text = font.render("Focus on ball!", True, (255, 255, 255))
-hit_text = font.render("Hit ball!", True, (255, 255, 255))
-miss_text = font.render("Miss ball!", True, (255, 255, 255))
+hit_text = font.render("Hitting!", True, (255, 255, 255))
+miss_hit_text = font.render("Miss swing!", True, (255, 255, 255))
+swing_early_text = font.render("Swing early!", True, (255, 255, 255))
+swing_late_text = font.render("Swing late!", True, (255, 255, 255))
+look_text = font.render("Missing ball!", True, (255, 255, 255))
+text = instruction_text
 
-# Using this function for Development
-def print_mouse_position():
-    mouse_pos = pygame.mouse.get_pos()
-    print(f"Mouse Position: {mouse_pos}")
-    
+
 # 볼 위치를 계산해서 return 해주는 함수
 # elapsed_time : 경과 시간, throw_time : 스트라이크 존에 도착하는데 걸리는 시간
 # random_pos_x, random_pos_y : 공이 스트라이크 존을 통과하는 위치
@@ -164,40 +141,54 @@ def ball_pos_cal(elapsed_time, throw_time, random_pos_x, random_pos_y):
     current_x = init_x + (random_pos_x - init_x) * (elapsed_time / throw_time)
     current_y = init_y + (random_pos_y - init_y) * (elapsed_time / throw_time)
 
-    # 공의 크기가 커짐
+    # 공의 크기가 커짐 (원근법)
     # scale_factor = 1 + elapsed_time / (2 * throw_time)
     scale_factor = 1 + elapsed_time / throw_time
     moveball = pygame.transform.scale(ball, (int(ball_size[0] * scale_factor), int(ball_size[1] * scale_factor)))
     # 현재 위치 반환
     return current_x, current_y
 
-def check_hit(hand_landmarks, ball_position):
-    # 손 위치가 공 위치와 일치하는지 확인
-    # 실제 위치에 따라 조건을 조절해야 할 수 있음
-    if (
-        ball_position[0] - 50 < hand_landmarks[0] < ball_position[0] + 50
-        and ball_position[1] - 50 < hand_landmarks[1] < ball_position[1] + 50
-    ):
-        return True
-    return False
+# 손 위치가 공 위치와 일치하는지 확인
+# def check_hit(frame, ball_position):
+#     results = hands.process(frame)
 
-def pose_condition(frame):
-    results = hands.process(frame)
+#     if results.multi_hand_landmarks:
+#         for hand_landmarks in results.multi_hand_landmarks:
+#             hand_x = int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * screen_width)
+#             hand_y = int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * screen_height)
 
-    if results.multi_hand_landmarks:
-        hand_landmarks = results.multi_hand_landmarks[0]
-        hand_position = (
-            int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * screen_width),
-            int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * screen_height),
-        )
+#             # 손이 공을 치는지 여부를 판단합니다.
+#             distance = getDistance.get_distance((hand_x, hand_y), ball_position)
+#             if distance < 30:  # 여기서 50은 임의로 설정한 값입니다. 실제로 조절이 필요할 수 있습니다.
+#                 return 2  # 손이 공을 침
+#             else:
+#                 return 1  # 손은 감지되었지만 공을 치지 않음
 
-        if (
-            strike_zone_x_pos < hand_position[0] < strike_zone_x_pos + strike_zone_width
-            and strike_zone_y_pos < hand_position[1] < strike_zone_y_pos + strike_zone_height
-        ):
-            return True
+#     return 0  # 손을 감지하지 못함
+
+
+# def pose_condition(frame):
+#     results = hands.process(frame)
+
+#     if results.multi_hand_landmarks:
+#         hand_landmarks = results.multi_hand_landmarks[0]
+#         hand_position = (
+#             int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * screen_width),
+#             int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * screen_height),
+#         )
+
+#         if (
+#             strike_zone_x_pos < hand_position[0] < strike_zone_x_pos + strike_zone_width
+#             and strike_zone_y_pos < hand_position[1] < strike_zone_y_pos + strike_zone_height
+#         ):
+#             return True
             
-    return False
+#     return False
+
+def donothing(limit):
+    start_time = time.time()
+    while (time.time() - start_time) < limit:
+        continue
 
 def wait(start_time, wait_time):
     if time.time() - start_time >= wait_time:
@@ -207,18 +198,10 @@ def wait(start_time, wait_time):
 throw_animation_speed = 500  # 공이 이동하는 속도 (픽셀/초)
 throw_animation_start_time = None  # 애니메이션 시작 시간
 
-def throw(start_time, throw_time, random_pox_x, random_pox_y):
+def throw(start_time, throw_time, random_pox_x, random_pox_y, frame):
     global moveball_x_pos, moveball_y_pos, throw_animation_start_time
     current_time = time.time()
     elapsed_time = current_time - start_time
-    
-    # 공이 도착하기 0.6초 전에 예상 위치 출력
-    if throw_time - elapsed_time < 0.6:
-        pygame.draw.circle(screen, (255, 0, 0), (random_pox_x + ball_width, random_pox_y + ball_width), ball_width / 2)
-
-    if elapsed_time >= throw_time:
-        return GAME_RESULT_3
-
     if throw_animation_start_time is None:
         throw_animation_start_time = current_time
 
@@ -227,21 +210,72 @@ def throw(start_time, throw_time, random_pox_x, random_pox_y):
     moveball_x_pos, moveball_y_pos = ball_pos_cal(
         animation_elapsed_time, throw_time, random_pox_x, random_pox_y
     )
+    
+    if throw_time - elapsed_time < 0:
+        return GAME_LATE
+    
+    # 공이 도착하기 dest_showtime 전에 예상 위치 출력
+    if throw_time - elapsed_time < settings.dest_showtime:
+        pygame.draw.circle(screen, (255, 0, 0), (random_pox_x + ball_width, random_pox_y + ball_width), ball_width / 1.3)
 
-    return GAME_THROW1
+    result = ai.check_hit(frame, (moveball_x_pos, moveball_y_pos))
+    # 공이 도착하기 allowedtime(0.2초) 전에 스윙하면 헛스윙
+    if throw_time - elapsed_time > allowed_time:
+        if result in {1, 2}:
+            return GAME_RESULT_1
+        else:
+            return GAME_THROW1
+    # 올바른 타이밍 allowedtime(0.2초) 전에 스윙하면 hit인정
+    elif throw_time - elapsed_time < allowed_time:
+        if result == 2:
+            return GAME_RESULT_2
+        elif result == 1:
+            return GAME_MISS_HIT
+        else:
+            return GAME_THROW1
+        
+def late(start_time, throw_time, random_pox_x, random_pox_y, frame):
+    global moveball_x_pos, moveball_y_pos, moveball
+    moveball_x_pos = random_pox_x
+    moveball_y_pos = random_pox_y
+    moveball = pygame.transform.scale(ball, (int(ball_size[0] * 2), int(ball_size[1] * 2)))
+    # 현재 위치 반환
+    current_time = time.time()
+    elapsed_time = current_time - start_time
+    pygame.draw.circle(screen, (255, 0, 0), (random_pox_x + ball_width, random_pox_y + ball_width), ball_width / 1.3)
+    if (elapsed_time > throw_time + settings.next_throwtime):
+        return GAME_LOOK
+    result = ai.check_hit(frame, (moveball_x_pos, moveball_y_pos))
+    if (elapsed_time - throw_time < 0.2):
+        if result == 2:
+            return GAME_RESULT_2
+        elif result == 1:
+            return GAME_MISS_HIT
+        else:
+            return GAME_LATE
+    elif (elapsed_time - throw_time < 0.8):
+        if result in {1, 2}:
+            return GAME_LATE_HIT
+        else:
+            return GAME_LATE
 
-def playgame():
-    global game_state, start_time, score, moveball, pitcher_ready
-    wait_time = random.uniform(1.5, 2.5)
-    throw_time = random.uniform(1.3, 2.0)
+
+def playgame(trycount=settings.trycount):
+    global game_state, start_time, score, moveball, moveball_x_pos, moveball_y_pos, moveball_size, pitcher_ready, throw_animation_start_time, text
+    csv_file = open('record.csv', 'a', newline='')
+    csv_writer = csv.writer(csv_file)
+    wait_time = random.uniform(settings.wait_min, settings.wait_max)
+    throw_time = random.uniform(settings.throw_min, settings.throw_max)
     random_pos_x = random.uniform(678, 938)
     random_pos_y = random.uniform(390, 698)
+    game_state = GAME_READY
+    text = instruction_text
+    score = 0
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
     pygame.display.set_caption('Camera Stream')
-    
-    
+    score_text = font.render(f'score : {score}, left attempt : {trycount}', True, (255, 255, 255))
     try:
         while True:
             for event in pygame.event.get():
@@ -259,7 +293,8 @@ def playgame():
             blended_frame = cv2.rotate(blended_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             blended_frame_rgb = cv2.cvtColor(blended_frame, cv2.COLOR_BGR2RGB)
             img = pygame.surfarray.make_surface(blended_frame_rgb)
-
+            if (text in {hit_text, miss_hit_text, swing_early_text, swing_late_text, look_text}):
+                time.sleep(2)
             # without any condition 항상 출력
             screen.blit(img, (0, 0))
             screen.blit(strike_zone, (strike_zone_x_pos, strike_zone_y_pos))
@@ -269,39 +304,140 @@ def playgame():
             pitcher = pitcher_ready
             text = instruction_text
             
+            # 공 data initializing
+            moveball = ball
+            moveball_size = ball_size
+            moveball_x_pos = ball_x_pos
+            moveball_y_pos = ball_y_pos
+            
+            if trycount <= 0:
+                game_state = GAME_OVER
+            
             if game_state == GAME_READY:
-                if (pose_condition(frame)):
+                if (ai.pose_condition(frame)):
                     game_state = GAME_WAIT
                     start_time = time.time()
             elif game_state == GAME_WAIT:
                 text = waiting_text
                 if (wait(start_time, wait_time)):
                     game_state = GAME_THROW1
+                    throw_sound.play()
                     start_time = time.time()
             elif game_state == GAME_THROW1:
                 pitcher = pitcher_throw
                 text = throw_text
-                game_state = throw(start_time, throw_time, random_pos_x, random_pos_y)
-            elif game_state == GAME_HIT:
-                continue
-            elif game_state == GAME_RESULT_1:
-                continue
+                game_state = throw(start_time, throw_time, random_pos_x, random_pos_y, frame)
+            elif game_state == GAME_MISS_HIT:
+                hitter = hitter_swing
+                miss_swing_sound.play()
+                trycount-=1
+                text=miss_hit_text
+                wait_time = random.uniform(settings.wait_min, settings.wait_max)
+                throw_time = random.uniform(settings.throw_min, settings.throw_max)
+                random_pos_x = random.uniform(settings.zone_x_min, settings.zone_x_max)
+                random_pos_y = random.uniform(settings.zone_y_min, settings.zone_y_max)
+                moveball = ball
+                moveball_size = ball_size
+                moveball_x_pos = ball_x_pos
+                moveball_y_pos = ball_y_pos
+                throw_animation_start_time = None
+                game_state = GAME_READY
             elif game_state == GAME_RESULT_2:
-                continue
-            elif game_state == GAME_RESULT_3:
-                continue
-            
+                hitter = hitter_swing
+                hit_sound.play()
+                score+=1
+                trycount-=1
+                text=hit_text
+                wait_time = random.uniform(settings.wait_min, settings.wait_max)
+                throw_time = random.uniform(settings.throw_min, settings.throw_max)
+                random_pos_x = random.uniform(settings.zone_x_min, settings.zone_x_max)
+                random_pos_y = random.uniform(settings.zone_y_min, settings.zone_y_max)
+                moveball = ball
+                moveball_size = ball_size
+                moveball_x_pos = ball_x_pos
+                moveball_y_pos = ball_y_pos
+                game_state = GAME_READY
+                throw_animation_start_time = None
+                #sleep
+            elif game_state == GAME_RESULT_1:
+                hitter = hitter_swing
+                miss_swing_sound.play()
+                trycount-=1
+                text=swing_early_text
+                wait_time = random.uniform(settings.wait_min, settings.wait_max)
+                throw_time = random.uniform(settings.throw_min, settings.throw_max)
+                random_pos_x = random.uniform(settings.zone_x_min, settings.zone_x_max)
+                random_pos_y = random.uniform(settings.zone_y_min, settings.zone_y_max)
+                moveball = ball
+                moveball_size = ball_size
+                moveball_x_pos = ball_x_pos
+                moveball_y_pos = ball_y_pos
+                game_state = GAME_READY
+                throw_animation_start_time = None
+                #sleep
+            elif game_state == GAME_LATE:
+                pitcher = pitcher_throw
+                text = throw_text
+                game_state = late(start_time, throw_time,  random_pos_x, random_pos_y, frame)
+            elif game_state == GAME_LATE_HIT:
+                hitter = hitter_swing
+                miss_swing_sound.play()
+                trycount-=1
+                text=swing_late_text
+                wait_time = random.uniform(settings.wait_min, settings.wait_max)
+                throw_time = random.uniform(settings.throw_min, settings.throw_max)
+                random_pos_x = random.uniform(settings.zone_x_min, settings.zone_x_max)
+                random_pos_y = random.uniform(settings.zone_y_min, settings.zone_y_max)
+                moveball = ball
+                moveball_size = ball_size
+                moveball_x_pos = ball_x_pos
+                moveball_y_pos = ball_y_pos
+                game_state = GAME_READY
+                throw_animation_start_time = None
+                #sleep
+            elif game_state == GAME_LOOK:
+                trycount-=1
+                text=look_text
+                wait_time = random.uniform(settings.wait_min, settings.wait_max)
+                throw_time = random.uniform(settings.throw_min, settings.throw_max)
+                random_pos_x = random.uniform(settings.zone_x_min, settings.zone_x_max)
+                random_pos_y = random.uniform(settings.zone_y_min, settings.zone_y_max)
+                moveball = ball
+                moveball_size = ball_size
+                moveball_x_pos = ball_x_pos
+                moveball_y_pos = ball_y_pos
+                game_state = GAME_READY
+                throw_animation_start_time = None
+                #sleep
+            elif game_state == GAME_OVER:
+                gameover_text = font.render("GAME OVER", True, (255, 0, 0))
+                totalscore_text = font.render(f'Total Score : {score}', True, (255, 0, 0))
+                screen.blit(gameover_text, (screen_width // 2, screen_height // 2 - 100))
+                screen.blit(totalscore_text, (screen_width // 2, screen_height // 2 + 100))
+                pygame.display.flip()
+                # Record timestamp and score in CSV file
+                current_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                csv_writer.writerow([current_timestamp, f'{(100 * score // settings.trycount) if settings.trycount != 0 else 0}%'])
+                time.sleep(2)
+                return
+            else:
+                print("error")
+                pygame.quit()
+            # score_text 업데이트
+            score_text = font.render(f'score : {score}, left attempt : {trycount}', True, (255, 255, 255))
             if game_state != GAME_READY:    
                 screen.blit(pitcher, (pitcher_ready_x_pos, pitcher_ready_y_pos))
                 screen.blit(hitter, (hitter_ready_x_pos, hitter_ready_y_pos))
                 screen.blit(moveball, (moveball_x_pos, moveball_y_pos))
             screen.blit(text, (10, 10))
-
+            screen.blit(score_text, (10, 100))
+            
+            clock.tick(120)
             pygame.display.flip()
 
-
+                
     except KeyboardInterrupt:
         pass
     finally:
-        pygame.quit()
+        # pygame.quit()
         cap.release()
