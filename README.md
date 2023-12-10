@@ -185,12 +185,13 @@ python3 mainmenu.py
 
 https://github.com/DawnGlow/Hitting_Ball/assets/69619752/817a20bc-d824-4c56-a107-850422665fa2
 
-참조) https://www.youtube.com/watch?v=XK3eU9egll8 - OpenCv 이미지 처리 참조
-https://github.com/choo121600/OpenCV_GunGame - 이미지 인식 처리 참조
-https://parkjh7764.tistory.com/88 - Pygame 기본 구조 참조
-https://wallpaperset.com/baseball-field-wallpaper - 게임 이미지 참조
-https://www.youtube.com/watch?v=SvlUj8RjkPc - 게임 사운드 참조
-https://www.youtube.com/watch?v=oke-KpxNf8g - Pose 인식 참조
+참조) 
+* https://www.youtube.com/watch?v=XK3eU9egll8 - OpenCv 이미지 처리 참조
+* https://github.com/choo121600/OpenCV_GunGame - 이미지 인식 처리 참조
+* https://parkjh7764.tistory.com/88 - Pygame 기본 구조 참조
+* https://wallpaperset.com/baseball-field-wallpaper - 게임 이미지 참조
+* https://www.youtube.com/watch?v=SvlUj8RjkPc - 게임 사운드 참조
+* https://www.youtube.com/watch?v=oke-KpxNf8g - Pose 인식 참조
 
 ### Developer
 20101238 배준서
