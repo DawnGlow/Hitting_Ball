@@ -5,7 +5,7 @@ import cv2
 import mediapipe as mp
 import random
 import csv
-from src import throw, overlay, settings, ai
+from src import overlay, settings, ai
 from development import debugFunction
 
 # Pygame 초기화
@@ -117,7 +117,7 @@ start_time = 0
 score = 0
 
 font = pygame.font.SysFont(None, 55)
-instruction_text = font.render("Put your hand (include V) in the strike zone", True, (255, 255, 255))
+instruction_text = font.render("Put your hand (include V) on screen", True, (255, 255, 255))
 waiting_text = font.render("Wating time", True, (255, 255, 255))
 throw_text = font.render("Focus on ball!", True, (255, 255, 255))
 hit_text = font.render("Hitting!", True, (255, 255, 255))
