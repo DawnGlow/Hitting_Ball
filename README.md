@@ -24,6 +24,7 @@ python 3.12버전 실행 불가(mediapipe 모듈을 사용할 수 없음)
 
 
 ### Demo Video
+https://github.com/DawnGlow/Hitting_Ball/raw/main/Demo.mp4
 
 참조) https://www.youtube.com/watch?v=XK3eU9egll8
 https://github.com/choo121600/OpenCV_GunGame
