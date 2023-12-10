@@ -2,7 +2,7 @@
 
 ---
 
-# KOREAN discription
+#### KOREAN discription
 
 ---
 
@@ -20,11 +20,86 @@
 
 팔을 재빠르게 움직여 공이 날라오는 위치에 다가가 올바른 타이밍에 공을 맞춰보세요!
 
-python 3.12버전 실행 불가(mediapipe 모듈을 사용할 수 없음)
+---
 
+#### Prerequisites
+
+----
+
+python 3.11 이하 버전이 설치 되어 있어야 합니다(python 3.12 호환 불가)
+
+```
+pip install opencv
+or
+pip install opencv-python
+```
+
+```
+pip install mediapipe
+```
+
+```
+pip install pygame
+```
+
+```
+pip install numpy
+```
+
+mac OS에서는 pip 명령어가 작동하지 않는 경우 pip3로 대신하여 사용
+
+
+
+(23.12.10 기준 mac(Arm) / Windows 실행 가능)
+
+- pygame 라이브러리가 OpenGL 기반이라 Metal 기반 Mac에서 게임 중 아주 드물게 오류가 발생할 수 있습니다. (23.12.10 최대한 해결)
+
+-------
+
+#### About folders / files
+
+-------
+
+📁**src/**
+
+```
+📝ai.py
+mediapipe 라이브러리를 통해 pose를 감지하고 hit / 게임 시작 조건에 맞는 pose를 판단하는 파일
+
+📝getDistance.py
+두 오브젝트 사이의 거리를 계산해 주는 파일
+
+📝overlay.py
+screen에 겹쳐여 할 두 image를 알파값을 통해 overlay하는 파일
+
+📝playgame.py
+게임의 flow를 다루는 핵심 파일
+
+📝settings.py
+게임의 기본적인 설정값을 다루는 파일. 
+```
+
+📁**iamge/**
+* 게임 이미지 패키지
+
+📁**iamge/**
+* 게임 효과음 패키지
+
+```
+📝mainmenu.py
+게임 실행시 python 명령어를 통해 실행해야 하는 파일
+
+📝README.md
+게임 소개 / 실행 / 요건 등등에 대해 설명하는 파일
+
+📝record.csv
+게임 기록 log 파일
+```
+----
 
 ### Demo Video
-https://raw.githubusercontent.com/DawnGlow/Hitting_Ball/main/Demo.mp4
+
+https://github.com/DawnGlow/Hitting_Ball/assets/69619752/817a20bc-d824-4c56-a107-850422665fa2
 
 참조) https://www.youtube.com/watch?v=XK3eU9egll8
 https://github.com/choo121600/OpenCV_GunGame
